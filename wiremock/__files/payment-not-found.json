@@ -1,0 +1,4 @@
+{
+  "error": "PAYMENT_NOT_FOUND",
+  "hint": "это тело лежит отдельным файлом в wiremock/__files - так удобнее, когда JSON большой"
+}

@@ -1,0 +1,59 @@
+name: pact-testing
+
+# Поднять "стенд" локально:
+#   docker compose up -d wiremock
+#   docker compose up -d pact-broker
+# Остановить:
+#   docker compose down          (данные брокера останутся в volume)
+#   docker compose down -v       (вместе с данными)
+
+services:
+
+  # "Виртуальный сервис": тот же WireMock, но как отдельный процесс на стенде,
+  # доступный всем - и автотестам, и разработчикам, и ручному тестированию.
+  # Маппинги лежат в ./wiremock и монтируются внутрь.
+  wiremock:
+    image: wiremock/wiremock:3.13.2
+    container_name: pact-wiremock
+    # --global-response-templating включает шаблоны {{...}} в ответах
+    command: ["--global-response-templating", "--verbose"]
+    ports:
+      # снаружи 8089 (8080 часто занят), внутри контейнера WireMock слушает 8080
+      - "8089:8080"
+    volumes:
+      - ./wiremock:/home/wiremock:ro
+
+  # Pact Broker - это "GitHub для контрактов".
+  # Хранит контракты от consumer-ов, результаты верификаций от провайдеров
+  # и отвечает на вопрос "можно ли деплоить эту версию".
+  pact-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pact
+      POSTGRES_PASSWORD: pact
+      POSTGRES_DB: pact
+    volumes:
+      - pact-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pact -d pact"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  pact-broker:
+    # тег лучше запинить на конкретную версию, latest взят для простоты
+    image: pactfoundation/pact-broker:latest
+    container_name: pact-broker
+    depends_on:
+      pact-db:
+        condition: service_healthy
+    ports:
+      - "9292:9292"
+    environment:
+      PACT_BROKER_DATABASE_URL: postgres://pact:pact@pact-db/pact
+      PACT_BROKER_BASE_URL: http://localhost:9292
+      PACT_BROKER_LOG_LEVEL: INFO
+      PACT_BROKER_ALLOW_PUBLIC_READ: "true"
+
+volumes:
+  pact-db-data:

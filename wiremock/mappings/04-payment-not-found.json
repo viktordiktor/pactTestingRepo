@@ -1,0 +1,15 @@
+{
+  "name": "Any other payment is not found",
+  "priority": 20,
+  "request": {
+    "method": "GET",
+    "urlPathPattern": "/payments/.+"
+  },
+  "response": {
+    "status": 404,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "bodyFileName": "payment-not-found.json"
+  }
+}

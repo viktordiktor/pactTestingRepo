@@ -1,0 +1,406 @@
+{
+  "consumer": {
+    "name": "order-service"
+  },
+  "interactions": [
+    {
+      "description": "a request to get an existing payment",
+      "key": "4aaf55c5",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "payment P-1 exists"
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/payments/P-1"
+      },
+      "response": {
+        "body": {
+          "content": {
+            "amountCents": 1999,
+            "createdAt": "2026-01-01T00:00:00Z",
+            "currency": "EUR",
+            "paymentId": "P-1",
+            "status": "AUTHORIZED"
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "matchingRules": {
+          "body": {
+            "$.amountCents": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "integer"
+                }
+              ]
+            },
+            "$.createdAt": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "format": "yyyy-MM-dd'T'HH:mm:ssXXX",
+                  "match": "timestamp"
+                }
+              ]
+            },
+            "$.currency": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.paymentId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.status": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      },
+      "transport": "http",
+      "type": "Synchronous/HTTP"
+    },
+    {
+      "description": "a request to authorize a payment",
+      "key": "52638a34",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "payment-service is available"
+        }
+      ],
+      "request": {
+        "body": {
+          "content": {
+            "amountCents": 1999,
+            "currency": "EUR",
+            "orderId": "11111111-2222-3333-4444-555555555555"
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "matchingRules": {
+          "body": {
+            "$.amountCents": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "integer"
+                }
+              ]
+            },
+            "$.currency": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "EUR|USD|GBP"
+                }
+              ]
+            },
+            "$.orderId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
+        "method": "POST",
+        "path": "/payments"
+      },
+      "response": {
+        "body": {
+          "content": {
+            "amountCents": 1999,
+            "createdAt": "2026-01-01T00:00:00Z",
+            "currency": "EUR",
+            "paymentId": "8a1f1e8c-0000-4000-8000-000000000001",
+            "status": "AUTHORIZED"
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "matchingRules": {
+          "body": {
+            "$.amountCents": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "integer"
+                }
+              ]
+            },
+            "$.createdAt": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "format": "yyyy-MM-dd'T'HH:mm:ssXXX",
+                  "match": "timestamp"
+                }
+              ]
+            },
+            "$.currency": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.paymentId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.status": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
+        "status": 201
+      },
+      "transport": "http",
+      "type": "Synchronous/HTTP"
+    },
+    {
+      "description": "a request to authorize a payment over the limit",
+      "key": "1615d7e2",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "payment-service is available"
+        }
+      ],
+      "request": {
+        "body": {
+          "content": {
+            "amountCents": 600000,
+            "currency": "EUR",
+            "orderId": "11111111-2222-3333-4444-555555555555"
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "matchingRules": {
+          "body": {
+            "$.amountCents": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "integer"
+                }
+              ]
+            },
+            "$.currency": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "EUR|USD|GBP"
+                }
+              ]
+            },
+            "$.orderId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
+        "method": "POST",
+        "path": "/payments"
+      },
+      "response": {
+        "body": {
+          "content": {
+            "reason": "LIMIT_EXCEEDED",
+            "status": "DECLINED"
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "matchingRules": {
+          "body": {
+            "$.reason": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "LIMIT_EXCEEDED|INSUFFICIENT_FUNDS"
+                }
+              ]
+            },
+            "$.status": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
+        "status": 402
+      },
+      "transport": "http",
+      "type": "Synchronous/HTTP"
+    },
+    {
+      "description": "a request to authorize a payment while payment-service is down",
+      "key": "f5c90cb0",
+      "pending": false,
+      "providerStates": [
+        {
+          "name": "payment-service is down"
+        }
+      ],
+      "request": {
+        "body": {
+          "content": {
+            "amountCents": 1999,
+            "currency": "EUR",
+            "orderId": "11111111-2222-3333-4444-555555555555"
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "matchingRules": {
+          "body": {
+            "$.amountCents": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "integer"
+                }
+              ]
+            },
+            "$.currency": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "EUR|USD|GBP"
+                }
+              ]
+            },
+            "$.orderId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
+        "method": "POST",
+        "path": "/payments"
+      },
+      "response": {
+        "body": {
+          "content": {
+            "error": "SERVICE_UNAVAILABLE"
+          },
+          "contentType": "application/json",
+          "encoded": false
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "matchingRules": {
+          "body": {
+            "$.error": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
+        "status": 503
+      },
+      "transport": "http",
+      "type": "Synchronous/HTTP"
+    }
+  ],
+  "metadata": {
+    "pact-jvm": {
+      "version": "4.7.7"
+    },
+    "pactSpecification": {
+      "version": "4.0"
+    },
+    "plugins": [
+
+    ]
+  },
+  "provider": {
+    "name": "payment-service"
+  }
+}

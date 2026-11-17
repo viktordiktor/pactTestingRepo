@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.nikanenka</groupId>
+    <artifactId>pactTesting</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <name>pactTesting</name>
+
+    <!--
+        Учебный проект для AQA: Пакт (contract testing) + WireMock + Testcontainers.
+
+        Внутри два "сервиса", которые обычно живут в разных репозиториях и разных командах:
+          * order-service   (consumer) - дергает payment-service по HTTP
+          * payment-service (provider) - принимает платежи
+
+        Мы держим оба здесь, чтобы можно было прогнать весь цикл на одной машине.
+        В реальности consumer-тесты живут в репо order-service, а provider-верификация - в репо payment-service.
+    -->
+
+    <properties>
+        <maven.compiler.release>19</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <junit.version>5.13.4</junit.version>
+        <pact.version>4.7.7</pact.version>
+        <wiremock.version>3.13.2</wiremock.version>
+        <testcontainers.version>1.21.4</testcontainers.version>
+        <jackson.version>2.19.2</jackson.version>
+        <assertj.version>3.27.6</assertj.version>
+        <slf4j.version>2.0.17</slf4j.version>
+
+        <!--
+            pact.rootDir - куда consumer-тесты складывают контракты (.json),
+            а provider-верификация их оттуда читает.
+            В реальной жизни эту роль играет Pact Broker, а папка - локальный оффлайн-вариант.
+        -->
+        <pact.rootDir>${project.basedir}/pacts</pact.rootDir>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- ===== "Продакшн"-код наших двух сервисов ===== -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+
+        <!-- ===== Тестовый стек ===== -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>${assertj.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>${slf4j.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- WireMock как библиотека: поднимается прямо в JVM теста на случайном порту -->
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock</artifactId>
+            <version>${wiremock.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Pact: сторона consumer (генерация контракта) -->
+        <dependency>
+            <groupId>au.com.dius.pact.consumer</groupId>
+            <artifactId>junit5</artifactId>
+            <version>${pact.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Pact: сторона provider (верификация контракта против реального сервиса) -->
+        <dependency>
+            <groupId>au.com.dius.pact.provider</groupId>
+            <artifactId>junit5</artifactId>
+            <version>${pact.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Testcontainers: поднимаем Docker-контейнеры из теста -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.4</version>
+                <configuration>
+                    <systemPropertyVariables>
+                        <pact.rootDir>${pact.rootDir}</pact.rootDir>
+                        <pact.folder>${pact.rootDir}</pact.folder>
+                        <!-- Версия провайдера нужна, когда результаты уезжают в Pact Broker -->
+                        <pact.provider.version>1.0.0</pact.provider.version>
+                        <pact.verifier.publishResults>false</pact.verifier.publishResults>
+                    </systemPropertyVariables>
+                    <argLine>-Dfile.encoding=UTF-8</argLine>
+                </configuration>
+            </plugin>
+
+            <!--
+                Позволяет руками запустить сервис:  mvn exec:java -Dexec.mainClass=com.nikanenka.payment.PaymentServiceServer
+            -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <configuration>
+                    <mainClass>com.nikanenka.payment.PaymentServiceServer</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

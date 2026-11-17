@@ -1,0 +1,25 @@
+{
+  "name": "Authorize payment (happy path)",
+  "priority": 5,
+  "request": {
+    "method": "POST",
+    "urlPath": "/payments",
+    "headers": {
+      "Content-Type": {
+        "contains": "application/json"
+      }
+    },
+    "bodyPatterns": [
+      {
+        "matchesJsonPath": "$[?(@.amountCents <= 500000)]"
+      }
+    ]
+  },
+  "response": {
+    "status": 201,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\n  \"paymentId\": \"pay_stand_1\",\n  \"status\": \"AUTHORIZED\",\n  \"orderId\": \"{{jsonPath request.body '$.orderId'}}\",\n  \"amountCents\": {{jsonPath request.body '$.amountCents'}},\n  \"currency\": \"{{jsonPath request.body '$.currency'}}\",\n  \"createdAt\": \"2026-01-01T00:00:00Z\"\n}"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "Get an existing payment",
+  "priority": 10,
+  "request": {
+    "method": "GET",
+    "urlPath": "/payments/P-1"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "paymentId": "P-1",
+      "status": "AUTHORIZED",
+      "amountCents": 1999,
+      "currency": "EUR",
+      "createdAt": "2026-01-01T00:00:00Z"
+    }
+  }
+}

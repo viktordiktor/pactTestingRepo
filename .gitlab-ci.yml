@@ -1,0 +1,97 @@
+# Учебный пример пайплайна для GitLab CI.
+# Смысл тот же, что в .github/workflows/ci.yml; отличается только синтаксис.
+#
+# В реальном проекте consumer и provider - разные репозитории и разные .gitlab-ci.yml.
+#
+# Требования к раннеру: privileged = true (нужен Docker-in-Docker для Testcontainers
+# и для Pact Broker). Если privileged запрещён, уберите docker-тесты и запускайте
+# брокер как внешний сервис (PACT_BROKER_URL из CI-переменных).
+
+stages:
+  - test
+  - contract
+
+variables:
+  # Docker-in-Docker: Maven-контейнер ходит в docker daemon по TCP
+  DOCKER_HOST: "tcp://docker:2375"
+  DOCKER_TLS_CERTDIR: ""
+  TESTCONTAINERS_HOST_OVERRIDE: "docker"
+  TESTCONTAINERS_RYUK_DISABLED: "true"
+
+  # Broker живёт в dind-сети, наружу опубликован на docker:9292
+  PACT_BROKER_URL: "http://docker:9292"
+  # Из контейнера pact-cli broker доступен по имени в сети pact-net
+  PACT_CLI_BROKER_URL: "http://pact-broker:9292"
+  PACT_CLI_NETWORK: "pact-net"
+  PACT_CLI_IMAGE: "pactfoundation/pact-cli:latest"
+
+  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
+
+default:
+  image: maven:3.9-eclipse-temurin-19
+  services:
+    - name: docker:27-dind
+      alias: docker
+  cache:
+    key: maven
+    paths:
+      - .m2/repository
+
+# ---------------------------------------------------------------------------
+# 1. Unit / component / consumer contracts (в реальности - репозиторий consumer-а)
+# ---------------------------------------------------------------------------
+unit-and-component:
+  stage: test
+  script:
+    - mvn -B test
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - pacts/
+      - target/surefire-reports/
+
+# ---------------------------------------------------------------------------
+# 2. Публикация контракта -> верификация провайдера -> can-i-deploy
+# ---------------------------------------------------------------------------
+contract-flow:
+  stage: contract
+  needs: ["unit-and-component"]
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq docker.io curl jq > /dev/null
+    - docker network create pact-net > /dev/null 2>&1 || true
+    - >
+      docker run -d --name pact-db --network pact-net --network-alias pact-db
+      -e POSTGRES_USER=pact -e POSTGRES_PASSWORD=pact -e POSTGRES_DB=pact
+      postgres:16-alpine
+    - for i in $(seq 1 60); do docker exec pact-db pg_isready -U pact -d pact > /dev/null 2>&1 && break; sleep 2; done
+    - >
+      docker run -d --name pact-broker --network pact-net -p 9292:9292
+      -e PACT_BROKER_DATABASE_URL=postgres://pact:pact@pact-db:5432/pact
+      -e PACT_BROKER_BASE_URL=http://pact-broker:9292
+      pactfoundation/pact-broker:latest
+  script:
+    - source scripts/ci/pact-broker.sh
+    - wait_for_broker 60
+
+    # consumer: тесты + публикация контракта
+    - mvn -B test -Dtest=PaymentConsumerContractTest
+    - publish_pact pacts/order-service-payment-service.json order-service payment-service "$CI_COMMIT_SHA"
+
+    # provider: верификация + публикация результатов
+    - >
+      mvn -B test -Dtest=PaymentProviderBrokerVerificationTest
+      -Dpact.broker.url="$PACT_BROKER_URL"
+      -Dpact.provider.version="$CI_COMMIT_SHA"
+      -Dpact.verifier.publishResults=true
+
+    # имитируем "провайдер уже задеплоен в staging" - нужен baseline для гейта consumer-а
+    - record_deployment payment-service "$CI_COMMIT_SHA" staging
+
+    # гейты: сначала consumer, затем provider
+    - can_i_deploy order-service "$CI_COMMIT_SHA" staging
+    - record_deployment order-service "$CI_COMMIT_SHA" staging
+    - can_i_deploy payment-service "$CI_COMMIT_SHA" staging
+  after_script:
+    - docker logs pact-broker --tail 100 || true

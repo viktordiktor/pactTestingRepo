@@ -1,0 +1,155 @@
+name: CI
+
+# Учебный пример пайплайна для контрактных тестов.
+#
+# В реальном проекте это ДВА разных файла в ДВУХ разных репозиториях:
+#   * order-service   -> job "consumer":   тесты + publish pact + can-i-deploy перед деплоем
+#   * payment-service -> job "provider":   provider verification + record-deployment
+#
+# Здесь оба "сервиса" лежат в одном модуле, поэтому джобы живут в одном файле.
+# Pact Broker поднимается через docker compose (pact-db + pact-broker) на время job-а.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Broker опубликован на localhost раннера (services: ports)
+  PACT_BROKER_URL: http://localhost:9292
+  # Изнутри контейнера pact-cli localhost - это сам контейнер
+  PACT_CLI_BROKER_URL: http://host.docker.internal:9292
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # 1. Быстрые проверки + consumer contract test.
+  #    В реальном репозитории consumer-а здесь же лежат unit/component тесты.
+  # ---------------------------------------------------------------------------
+  tests:
+    name: Tests + consumer contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 19
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '19'
+          cache: maven
+
+      # Broker-тест выключен (нет -Dpact.broker.url), Docker-тест использует Docker раннера.
+      - name: Run all tests
+        run: mvn -B test
+
+      - name: Upload generated pacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pacts
+          path: pacts/*.json
+          retention-days: 7
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # 2. Полный контрактный флоу:
+  #    publish pact -> provider verification -> record deployments -> can-i-deploy.
+  #    В реальности шаги 2a и 2b - это два разных репозитория и два пайплайна.
+  # ---------------------------------------------------------------------------
+  contract-flow:
+    name: Publish pact + verify provider + can-i-deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: tests
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 19
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '19'
+          cache: maven
+
+      - name: Download pacts from the tests job
+        uses: actions/download-artifact@v4
+        with:
+          name: pacts
+          path: pacts
+
+      # docker-compose поднимает pact-db и ждёт её healthcheck (см. depends_on),
+      # поэтому здесь нет гонки "broker стартовал раньше базы".
+      - name: Start Pact Broker
+        run: docker compose up -d pact-broker
+
+      - name: Wait for Pact Broker
+        run: |
+          source scripts/ci/pact-broker.sh
+          wait_for_broker 90
+
+      # --- consumer part (в реальности: репозиторий order-service) ------------
+
+      - name: Publish pact
+        run: |
+          source scripts/ci/pact-broker.sh
+          publish_pact pacts/order-service-payment-service.json \
+            order-service payment-service "$GITHUB_SHA"
+
+      # --- provider part (в реальности: репозиторий payment-service) ----------
+
+      - name: Provider verification (publishes results to the broker)
+        run: |
+          mvn -B test -Dtest=PaymentProviderBrokerVerificationTest \
+            -Dpact.broker.url="$PACT_BROKER_URL" \
+            -Dpact.provider.version="$GITHUB_SHA" \
+            -Dpact.verifier.publishResults=true
+
+      - name: Record provider deployment (baseline for the consumer gate)
+        run: |
+          source scripts/ci/pact-broker.sh
+          record_deployment payment-service "$GITHUB_SHA" staging
+
+      # --- deploy gates -------------------------------------------------------
+
+      - name: can-i-deploy order-service -> staging
+        run: |
+          source scripts/ci/pact-broker.sh
+          can_i_deploy order-service "$GITHUB_SHA" staging
+
+      - name: Record order-service deployment
+        run: |
+          source scripts/ci/pact-broker.sh
+          record_deployment order-service "$GITHUB_SHA" staging
+
+      - name: can-i-deploy payment-service -> staging
+        run: |
+          source scripts/ci/pact-broker.sh
+          can_i_deploy payment-service "$GITHUB_SHA" staging
+
+      # Показываем будущий production-гейт в режиме наблюдения.
+      - name: can-i-deploy order-service -> production (dry-run)
+        run: |
+          source scripts/ci/pact-broker.sh
+          ensure_environment production true > /dev/null
+          can_i_deploy order-service "$GITHUB_SHA" production --dry-run
+
+      - name: Broker logs
+        if: always()
+        run: docker compose logs --tail=100 pact-broker

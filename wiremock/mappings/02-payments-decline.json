@@ -1,0 +1,23 @@
+{
+  "name": "Decline payment over the limit",
+  "priority": 1,
+  "request": {
+    "method": "POST",
+    "urlPath": "/payments",
+    "bodyPatterns": [
+      {
+        "matchesJsonPath": "$[?(@.amountCents > 500000)]"
+      }
+    ]
+  },
+  "response": {
+    "status": 402,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "status": "DECLINED",
+      "reason": "LIMIT_EXCEEDED"
+    }
+  }
+}
